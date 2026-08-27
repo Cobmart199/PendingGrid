@@ -60,10 +60,16 @@ int start()
    // if(!NoLongTrades()) Print("DEBUG: Long trades exist");
    // if(IsMarginLimitReached()) Print("DEBUG: Margin limit reached");
    
-   bool allowLong = EntryLong && !IsPriceOccupied(buytar) && !IsMarginLimitReached();
-   bool allowShort = EntryShort && !IsPriceOccupied(selltar) && !IsMarginLimitReached();
    int pendingLong = CountPendingOrdersBySide(true);
    int pendingShort = CountPendingOrdersBySide(false);
+
+   bool allowLong = EntryLong && !IsPriceOccupied(buytar) && !IsMarginLimitReached();
+   bool allowShort = EntryShort && !IsPriceOccupied(selltar) && !IsMarginLimitReached();
+
+   // Prevent exceeding max pending orders per side and avoid duplicate prices.
+   if(pendingLong >= maxNumberOfPending) allowLong = false;
+   if(pendingShort >= maxNumberOfPending) allowShort = false;
+
    double lotToPlaceLong = order_amount_lots;
    double lotToPlaceShort = order_amount_lots;
    if(maxNumberOfPending > 1)
@@ -335,6 +341,8 @@ double UpperMajorLine(double pr)
 
 void EnterLongLimit(double target, double lotSize)
 {
+  if(HasPendingOrderAtPrice(target, true)) return;
+
   int res=-1;
   double pip = GetPipSize();
   double tp=target+takeprofit_points*pip;
@@ -343,6 +351,7 @@ void EnterLongLimit(double target, double lotSize)
   for(int i=0;(i<repeat) && (res<0);i++)
   {
       RefreshRates();
+      if(HasPendingOrderAtPrice(target, true)) return;
 
       int currentSL = GetStopLossPoints();
       double sl=target-currentSL*pip;
@@ -371,6 +380,8 @@ void EnterLongLimit(double target, double lotSize)
 
 void EnterShortLimit(double target, double lotSize)
 {
+  if(HasPendingOrderAtPrice(target, false)) return;
+
   int res=-1;
   double pip = GetPipSize();
   double tp=target-takeprofit_points*pip;
@@ -379,6 +390,7 @@ void EnterShortLimit(double target, double lotSize)
   for(int i=0;(i<repeat) && (res<0);i++)
   {
       RefreshRates();
+      if(HasPendingOrderAtPrice(target, false)) return;
 
       int currentSL = GetStopLossPoints();
       double sl=target+currentSL*pip;
@@ -426,6 +438,36 @@ void DumpOrders()
       //       " price=", DoubleToStr(OrderOpenPrice(), Digits),
       //       " lots=", DoubleToStr(OrderLots(),2), " magic=", OrderMagicNumber());
    }
+}
+
+bool HasPendingOrderAtPrice(double pr, bool longSide)
+{
+   int total=OrdersTotal();
+   for(int n=0;n<total;n++)
+   {
+      if(OrderSelect(n,SELECT_BY_POS,MODE_TRADES)==false) continue;
+      if(OrderSymbol()!=Symbol()) continue;
+      if(OrderCloseTime()!=0) continue;
+      if(OrderMagicNumber()!=MagicNumber) continue;
+      int type = OrderType();
+      if(longSide)
+      {
+         if(type==OP_BUYLIMIT || type==OP_BUYSTOP)
+         {
+            if(IsEqual(OrderOpenPrice(),pr))
+               return (true);
+         }
+      }
+      else
+      {
+         if(type==OP_SELLLIMIT || type==OP_SELLSTOP)
+         {
+            if(IsEqual(OrderOpenPrice(),pr))
+               return (true);
+         }
+      }
+   }
+   return (false);
 }
 
 bool IsPriceOccupied(double pr)
