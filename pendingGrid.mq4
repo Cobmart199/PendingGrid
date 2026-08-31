@@ -342,6 +342,7 @@ double UpperMajorLine(double pr)
 void EnterLongLimit(double target, double lotSize)
 {
   if(HasPendingOrderAtPrice(target, true)) return;
+  if(HasOpenTradeAtPrice(target, true)) return;
 
   int res=-1;
   double pip = GetPipSize();
@@ -381,6 +382,7 @@ void EnterLongLimit(double target, double lotSize)
 void EnterShortLimit(double target, double lotSize)
 {
   if(HasPendingOrderAtPrice(target, false)) return;
+  if(HasOpenTradeAtPrice(target, false)) return;
 
   int res=-1;
   double pip = GetPipSize();
@@ -470,6 +472,37 @@ bool HasPendingOrderAtPrice(double pr, bool longSide)
    return (false);
 }
 
+// Check if there's an open market trade (BUY or SELL) at a specific price and side
+bool HasOpenTradeAtPrice(double pr, bool longSide)
+{
+   int total=OrdersTotal();
+   for(int n=0;n<total;n++)
+   {
+      if(OrderSelect(n,SELECT_BY_POS,MODE_TRADES)==false) continue;
+      if(OrderSymbol()!=Symbol()) continue;
+      if(OrderCloseTime()!=0) continue;
+      if(OrderMagicNumber()!=MagicNumber) continue;
+      int type = OrderType();
+      if(longSide)
+      {
+         if(type==OP_BUY)
+         {
+            if(IsEqual(OrderOpenPrice(),pr))
+               return (true);
+         }
+      }
+      else
+      {
+         if(type==OP_SELL)
+         {
+            if(IsEqual(OrderOpenPrice(),pr))
+               return (true);
+         }
+      }
+   }
+   return (false);
+}
+
 bool IsPriceOccupied(double pr)
 {
    int total=OrdersTotal();
@@ -480,8 +513,9 @@ bool IsPriceOccupied(double pr)
       if(OrderCloseTime()!=0) continue;
       if(OrderMagicNumber()!=MagicNumber) continue;
       int type = OrderType();
-      // Only consider pending orders as occupying a pending price.
-      if(type==OP_BUYLIMIT || type==OP_SELLLIMIT || type==OP_BUYSTOP || type==OP_SELLSTOP)
+      // Check both pending orders and open trades as occupying a price.
+      if(type==OP_BUYLIMIT || type==OP_SELLLIMIT || type==OP_BUYSTOP || type==OP_SELLSTOP ||
+         type==OP_BUY || type==OP_SELL)
       {
          if(IsEqual(OrderOpenPrice(),pr))
          {
