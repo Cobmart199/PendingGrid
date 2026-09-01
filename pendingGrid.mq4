@@ -33,6 +33,7 @@ int repeat=30;//new
 int sleep_interval=1000;//new
 int lastOrderSide=1; // 0=long, 1=short
 int pairSize=1; // number of paired units to maintain per side
+int lastReportedOpenTrades = -1;
 
 int init()
 {
@@ -62,6 +63,13 @@ int start()
    
    int pendingLong = CountPendingOrdersBySide(true);
    int pendingShort = CountPendingOrdersBySide(false);
+   int openTrades = CountOpenTrades();
+
+   if(openTrades != lastReportedOpenTrades)
+   {
+      Print("Open trades: ", openTrades, " | Pending long: ", pendingLong, " | Pending short: ", pendingShort);
+      lastReportedOpenTrades = openTrades;
+   }
 
    bool allowLong = EntryLong && !IsPriceOccupied(buytar) && !IsMarginLimitReached();
    bool allowShort = EntryShort && !IsPriceOccupied(selltar) && !IsMarginLimitReached();
@@ -197,6 +205,24 @@ int CountOrdersBySide(bool longSide)
          if(type==OP_SELL || type==OP_SELLLIMIT || type==OP_SELLSTOP)
             count++;
       }
+   }
+   return(count);
+}
+
+int CountOpenTrades()
+{
+   int count=0;
+   int total=OrdersTotal();
+   for(int i=0;i<total;i++)
+   {
+      if(OrderSelect(i,SELECT_BY_POS,MODE_TRADES)==false) continue;
+      if(OrderSymbol()!=Symbol()) continue;
+      if(OrderCloseTime()!=0) continue;
+      if(OrderMagicNumber()!=MagicNumber) continue;
+
+      int type = OrderType();
+      if(type==OP_BUY || type==OP_SELL)
+         count++;
    }
    return(count);
 }
